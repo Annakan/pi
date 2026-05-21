@@ -15,6 +15,8 @@ import type {
 	BeforeAgentStartEvent,
 	BeforeAgentStartEventResult,
 	BeforeProviderRequestEvent,
+	CommandResolveEvent,
+	CommandResolveResult,
 	CompactOptions,
 	ContextEvent,
 	ContextEventResult,
@@ -49,6 +51,7 @@ import type {
 	SessionBeforeSwitchResult,
 	SessionBeforeTreeResult,
 	SessionShutdownEvent,
+	SlashCommandInfo,
 	ToolCallEvent,
 	ToolCallEventResult,
 	ToolResultEvent,
@@ -556,6 +559,10 @@ export class ExtensionRunner {
 
 	getCommand(name: string): ResolvedCommand | undefined {
 		return this.resolveRegisteredCommands().find((command) => command.invocationName === name);
+	}
+
+	getResolvedCommands(): ResolvedCommand[] {
+		return this.resolveRegisteredCommands();
 	}
 
 	/**
@@ -1075,5 +1082,40 @@ export class ExtensionRunner {
 		return currentText !== text || currentImages !== images
 			? { action: "transform", text: currentText, images: currentImages }
 			: { action: "continue" };
+	}
+
+	async emitCommandResolve(
+		text: string,
+		commandName: string,
+		args: string,
+		found: boolean,
+		availableCommands: readonly SlashCommandInfo[],
+	): Promise<CommandResolveResult | undefined> {
+		const ctx = this.createContext();
+
+		for (const ext of this.extensions) {
+			for (const handler of ext.handlers.get("command_resolve") ?? []) {
+				try {
+					const event: CommandResolveEvent = {
+						type: "command_resolve",
+						text,
+						commandName,
+						args,
+						found,
+						availableCommands,
+					};
+					const result = (await handler(event, ctx)) as CommandResolveResult | undefined;
+					if (result) return result;
+				} catch (err) {
+					this.emitError({
+						extensionPath: ext.path,
+						event: "command_resolve",
+						error: err instanceof Error ? err.message : String(err),
+						stack: err instanceof Error ? err.stack : undefined,
+					});
+				}
+			}
+		}
+		return undefined;
 	}
 }

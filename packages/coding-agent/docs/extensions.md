@@ -852,6 +852,66 @@ pi.on("input", async (event, ctx) => {
 
 Transforms chain across handlers. See [input-transform.ts](../examples/extensions/input-transform.ts) and [input-transform-streaming.ts](../examples/extensions/input-transform-streaming.ts) for `streamingBehavior`-aware routing.
 
+#### command_resolve
+
+Fired when a slash command is not recognized by built-in resolution (extensions, skills, templates). Plugins can block invalid commands, transform them, or provide helpful error messages.
+
+**Processing order:**
+1. Extension commands (`/cmd`) checked - if found, event is skipped
+2. Skill commands (`/skill:name`) checked and expanded - if found, event is skipped
+3. Prompt templates (`/template`) checked and expanded - if found, event is skipped
+4. `command_resolve` event fires - if text still looks like a command, allows plugin intervention
+5. If not handled: raw text is sent to LLM
+
+```typescript
+pi.on("command_resolve", async (event, ctx) => {
+  // event.text - original command text (e.g., "/unknown arg")
+  // event.commandName - extracted name without / (e.g., "unknown")
+  // event.args - everything after command name (e.g., "arg")
+  // event.found - whether pi's built-in resolution found a command
+  // event.availableCommands - list of extension, skill, and template commands
+
+  // Block unrecognized commands
+  if (!event.found && event.commandName === "typo") {
+    return {
+      action: "error",
+      error: `Command "/${event.commandName}" not found. Did you mean /your_command?`
+    };
+  }
+
+  // Suggest alternatives based on command name similarity
+  if (!event.found) {
+    const similar = event.availableCommands
+      .filter(cmd => cmd.name.includes(event.commandName.slice(0, 2)))
+      .map(cmd => cmd.name);
+    if (similar.length > 0) {
+      return {
+        action: "error",
+        error: `Command not found. Did you mean: ${similar.join(", ")}?`
+      };
+    }
+  }
+
+  // Transform unrecognized commands for LLM
+  if (event.commandName === "ask" && !event.found) {
+    return {
+      action: "transform",
+      text: event.args  // Convert /ask ... to regular prompt
+    };
+  }
+
+  // Allow LLM fallback (default)
+  return { action: "continue" };
+});
+```
+
+**Results:**
+- `continue` - send unchanged text to LLM (default if no handler returns)
+- `transform` - modify text before sending to LLM
+- `error` - show error message and don't send to LLM
+
+Handlers run in extension load order. First handler to return a result wins.
+
 ## ExtensionContext
 
 All handlers receive `ctx: ExtensionContext`.

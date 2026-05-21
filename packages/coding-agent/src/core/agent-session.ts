@@ -1024,6 +1024,36 @@ export class AgentSession {
 				expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
 			}
 
+			// Emit command_resolve event if text still looks like a command after expansions
+			if (expandPromptTemplates && currentText.startsWith("/") && expandedText.startsWith("/")) {
+				const spaceIndex = currentText.indexOf(" ");
+				const commandName = spaceIndex === -1 ? currentText.slice(1) : currentText.slice(1, spaceIndex);
+				const args = spaceIndex === -1 ? "" : currentText.slice(spaceIndex + 1);
+
+				const resolveResult = await this._extensionRunner.emitCommandResolve(
+					currentText,
+					commandName,
+					args,
+					false, // found: we already checked and didn't find it
+					this._getAvailableCommands(),
+				);
+
+				if (resolveResult?.action === "error") {
+					this._extensionRunner.emitError({
+						extensionPath: "command_resolve",
+						event: "command_resolve",
+						error: resolveResult.error,
+					});
+					preflightResult?.(true);
+					return;
+				}
+
+				if (resolveResult?.action === "transform") {
+					expandedText = resolveResult.text;
+				}
+				// action: "continue" or undefined → proceed with LLM
+			}
+
 			// If streaming, queue via steer() or followUp() based on option
 			if (this.isStreaming) {
 				if (!options?.streamingBehavior) {
@@ -2157,6 +2187,31 @@ export class AgentSession {
 		}
 
 		this.agent.state.model = refreshedModel;
+	}
+
+	private _getAvailableCommands(): SlashCommandInfo[] {
+		const extensionCommands: SlashCommandInfo[] = this._extensionRunner.getRegisteredCommands().map((command) => ({
+			name: command.invocationName,
+			description: command.description,
+			source: "extension",
+			sourceInfo: command.sourceInfo,
+		}));
+
+		const templates: SlashCommandInfo[] = this.promptTemplates.map((template) => ({
+			name: template.name,
+			description: template.description,
+			source: "prompt",
+			sourceInfo: template.sourceInfo,
+		}));
+
+		const skills: SlashCommandInfo[] = this.resourceLoader.getSkills().skills.map((skill) => ({
+			name: `skill:${skill.name}`,
+			description: skill.description,
+			source: "skill",
+			sourceInfo: skill.sourceInfo,
+		}));
+
+		return [...extensionCommands, ...templates, ...skills];
 	}
 
 	private _bindExtensionCore(runner: ExtensionRunner): void {

@@ -80,6 +80,7 @@ export type { ExecOptions, ExecResult } from "../exec.ts";
 export type { BuildSystemPromptOptions } from "../system-prompt.ts";
 export type { AgentToolResult, AgentToolUpdateCallback, ToolExecutionMode };
 export type { AppKeybinding, KeybindingsManager } from "../keybindings.ts";
+export type { SlashCommandInfo } from "../slash-commands.ts";
 
 // ============================================================================
 // UI Context
@@ -767,6 +768,31 @@ export type InputEventResult =
 	| { action: "handled" };
 
 // ============================================================================
+// Command Resolution Events
+// ============================================================================
+
+/** Fired when a "/" command is not recognized by built-in resolution */
+export interface CommandResolveEvent {
+	type: "command_resolve";
+	/** The original user input text */
+	text: string;
+	/** Extracted command name (without the /) */
+	commandName: string;
+	/** Everything after the command name and space */
+	args: string;
+	/** Whether pi's built-in systems resolved this command */
+	found: boolean;
+	/** Available commands for suggestions/inspection */
+	availableCommands: readonly SlashCommandInfo[];
+}
+
+/** Result from command_resolve handler */
+export type CommandResolveResult =
+	| { action?: "continue" } // Default: send to LLM as-is
+	| { action: "transform"; text: string } // Modify text before LLM
+	| { action: "error"; error: string }; // Show error, don't send to LLM
+
+// ============================================================================
 // Tool Events
 // ============================================================================
 
@@ -970,6 +996,7 @@ export type ExtensionEvent =
 	| ThinkingLevelSelectEvent
 	| UserBashEvent
 	| InputEvent
+	| CommandResolveEvent
 	| ToolCallEvent
 	| ToolResultEvent;
 
@@ -1126,6 +1153,7 @@ export interface ExtensionAPI {
 	on(event: "tool_result", handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>): void;
 	on(event: "user_bash", handler: ExtensionHandler<UserBashEvent, UserBashEventResult>): void;
 	on(event: "input", handler: ExtensionHandler<InputEvent, InputEventResult>): void;
+	on(event: "command_resolve", handler: ExtensionHandler<CommandResolveEvent, CommandResolveResult>): void;
 
 	// =========================================================================
 	// Tool Registration
