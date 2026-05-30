@@ -1,0 +1,15 @@
+{
+  "name": "pi-command-fallthrough",
+  "version": "0.1.0",
+  "description": "Demonstration pi package: control whether unrecognized slash commands fall through to the LLM, with a settings page.",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "type": "module",
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

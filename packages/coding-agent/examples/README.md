@@ -18,6 +18,10 @@ Example extensions demonstrating:
 - External integrations (SSH, file watchers, system theme sync)
 - Custom providers (Anthropic with custom streaming, GitLab Duo)
 
+### [packages/](packages/)
+Example pi packages demonstrating:
+- Command fall-through (unrecognized slash commands)
+
 ## Documentation
 
 - [SDK Reference](sdk/README.md)
